@@ -2,7 +2,7 @@
 My very own Snake game implemented in OpenAI Gym. There are many out there, but there's none like this. :D
 I'm a control freak so I like to have control over the environment itself, thus created this for education and flexibility.
 
-This is the version v3. Snake v1 returns a set of observables and Snake v1 returns the entire environment in list of matrices.
+This is the version v3. Snake v1 returns a set of observables and Snake v2 returns the entire environment in list of matrices.
 For Snake v3, it will return distances between the Snake head and the relevant objects such as walls, apple or itself in 8 directions so a total of 24 inputs. 
 
 # Details
