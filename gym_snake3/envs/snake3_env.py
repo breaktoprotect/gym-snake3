@@ -2,29 +2,31 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide" # Import and supress pygame banner
+
 import pygame
 import random
 import numpy as np
 import math
 
-# Global parameters
-MAX_SNAKE_HEALTH = 200
-
 class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, render=False,width=20, height=20,segment_width=50):
+    def __init__(self, render=False,width=20, height=20,segment_width=50, apple_body_distance=False):
         self.ENV_HEIGHT = height 
         self.ENV_WIDTH = width
         self.action_space = spaces.Discrete(4)
         self.snake_previous = None
         self.SEGMENT_WIDTH = segment_width # For rendering only
         self.RENDER = render
+        self.INITIAL_HEALTH = width*2 + height*2
+        self.APPLE_BODY_DISTANCE = apple_body_distance # If True, apple and walls will be detected as a value before 0 and 1. Else, boolean.
 
         # Render using pygame
 
         self.window = None
-			
+
     def step(self, action):
         reward = 0 # initialize per step
         opp_facing = (self.facing + 2) % 4 # Calculate opposite of facing
@@ -43,7 +45,7 @@ class SnakeEnv(gym.Env):
         #Simple Reward: Eating apple (1 point)
         if self._check_eaten():
             reward += 1	#+(0.25*self.snake_health/MAX_SNAKE_HEALTH) # 1 + 0.25 x early explorer's reward
-            self.snake_health = MAX_SNAKE_HEALTH # Health restored to max 
+            self.snake_health = self.INITIAL_HEALTH + len(self.snake_segments) # Health restored to max 
         #* Starving the snake
         else:
             self.snake_health -= 1 # reduce hitpoint simulate hunger.
@@ -70,7 +72,7 @@ class SnakeEnv(gym.Env):
 
             observations = np.append(eight_direction_sensors, facing_sensors) 
             observations = np.append(observations, tail_direction)
-            #observations = np.append(observations, distance_to_apple)
+            observations = np.append(observations, distance_to_apple)
 
         #* Final adjustments
         self.snake_previous = self.snake_segments[0]
@@ -80,11 +82,11 @@ class SnakeEnv(gym.Env):
 
     def reset(self):
         # Snake starting position
-        head_x = random.randint(5,15)
-        head_y = random.randint(5,15)
+        head_x = random.randint(3,self.ENV_WIDTH-3)
+        head_y = random.randint(3,self.ENV_HEIGHT-3)
 
         self.snake_segments = [(head_x,head_y),(head_x,head_y+1),(head_x,head_y+2)]
-        self.snake_health = MAX_SNAKE_HEALTH # Hitpoints
+        self.snake_health = self.INITIAL_HEALTH + len(self.snake_segments) # Hitpoints
         self.facing = 0 # 0 is up, 1 is right, 2 is down, 3 is left #TODO randomize
         # Apple starting position
         self.apple_pos = self._spawn_apple()
@@ -249,7 +251,10 @@ class SnakeEnv(gym.Env):
 
             if object_type:
                 # Get the normalized distance
-                norm_distance = self._normalized_distance_two_points(epicenter, cur_point)
+                if self.APPLE_BODY_DISTANCE:
+                    norm_distance = self._normalized_distance_two_points(epicenter, cur_point)
+                else:
+                    norm_distnace = 1 # Boolean True
 
                 if object_type == 'wall':
                     wall_dist = norm_distance
@@ -335,16 +340,16 @@ class SnakeEnv(gym.Env):
 
         # Up
         if np.all(vector_of_tail == (0,-1)):
-            return np.array([1, 0, 0, 0])
+            return np.array([0, 0, 1, 0])
         # Right
         elif np.all(vector_of_tail == (1,0)):
-            return np.array([0, 1, 0, 0])
+            return np.array([0, 0, 0, 1])
         # Down
         elif np.all(vector_of_tail == (0,1)):
-            return np.array([0, 0, 1, 0])
+            return np.array([1, 0, 0, 0])
         # Left
         else:
-            return np.array([0, 0, 0, 1])
+            return np.array([0, 1, 0, 0])
 
     #! Experimental hybrid from gym-snakev1
     # Calculate scalar distance between snake head's and apple
@@ -418,3 +423,21 @@ class SnakeEnv(gym.Env):
 
     
     '''
+#? Test bed only
+if __name__ == "__main__":
+    import gym
+    import gym_snake3
+    env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12)
+    env.reset()
+
+    observation, reward, done, info = env.step(1)
+    observation, reward, done, info = env.step(2)
+    observation, reward, done, info = env.step(2)
+
+    print("observation:", observation)
+    print("")
+    print("sensed_direction:", env._sense_tail_direction())
+
+    env.init_window()
+    env.render()
+    input()
