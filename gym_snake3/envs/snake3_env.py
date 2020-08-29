@@ -68,11 +68,11 @@ class SnakeEnv(gym.Env):
             facing_sensors = self._sense_facing_direction()
             tail_direction = self._sense_tail_direction()
 
-            distance_to_apple = self._distance_to_apple() #!experimental gym-snakev1 hybrid
-
             observations = np.append(eight_direction_sensors, facing_sensors) 
             observations = np.append(observations, tail_direction)
-            observations = np.append(observations, distance_to_apple)
+
+            #distance_to_apple = self._distance_to_apple() #!experimental gym-snakev1 hybrid
+            #observations = np.append(observations, distance_to_apple)
 
         #* Final adjustments
         self.snake_previous = self.snake_segments[0]
@@ -254,10 +254,11 @@ class SnakeEnv(gym.Env):
                 if self.APPLE_BODY_DISTANCE:
                     norm_distance = self._normalized_distance_two_points(epicenter, cur_point)
                 else:
-                    norm_distnace = 1 # Boolean True
+                    norm_distance = 1 # Boolean True
 
                 if object_type == 'wall':
-                    wall_dist = norm_distance
+                    #wall_dist = norm_distance
+                    wall_dist = self._normalized_distance_two_points(epicenter, cur_point) # always distance-based, not boolean
                     return wall_dist, body_dist, apple_dist 
 
                 if object_type == 'body':
@@ -372,57 +373,6 @@ class SnakeEnv(gym.Env):
 
         return norm_distance
 
-    #TODO OLD: Observation Functions
-    # Snake 
-    #? May not be required for this version
-    '''
-    def _next_step_collision(self):
-        # snake_segments[0] is the head of the snake
-
-        # UP
-        new_snake_head_pos = np.subtract(self.snake_segments[0], (0, self.SEGMENT_WIDTH))
-        up_collision = self._check_collision(new_snake_head_pos)
-
-        # RIGHT
-        new_snake_head_pos = np.add(self.snake_segments[0], (self.SEGMENT_WIDTH, 0))
-        right_collision = self._check_collision(new_snake_head_pos)
-
-        # DOWN
-        new_snake_head_pos = np.add(self.snake_segments[0], (0, self.SEGMENT_WIDTH))
-        down_collision = self._check_collision(new_snake_head_pos)
-
-        # LEFT
-        new_snake_head_pos = np.subtract(self.snake_segments[0], (self.SEGMENT_WIDTH, 0))
-        left_collision = self._check_collision(new_snake_head_pos)
-
-        return up_collision, right_collision, down_collision, left_collision
-    
-
-
-    # From current position, where is the food? Above, right, left or below
-    def _food_relative_direction(self):
-        apple_above = apple_right = apple_below = apple_left = 0
-
-        # Above
-        if self.apple_pos[1] < self.snake_segments[0][1]:
-            apple_above = 1
-
-        # Right of 
-        if self.apple_pos[0] > self.snake_segments[0][0]:
-            apple_right = 1 
-
-        # Below - apple(y) > snake(y)
-        if self.apple_pos[1] > self.snake_segments[0][1]:
-            apple_below = 1 
-
-        # Left of
-        if self.apple_pos[0] < self.snake_segments[0][0]:
-            apple_left = 1 
-
-        return apple_above, apple_right, apple_below, apple_left
-
-    
-    '''
 #? Test bed only
 if __name__ == "__main__":
     import gym
