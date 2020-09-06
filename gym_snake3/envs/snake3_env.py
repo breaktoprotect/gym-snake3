@@ -10,22 +10,25 @@ import random
 import numpy as np
 import math
 
+from numba import jit # use gpu
+
 class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, render=False,width=20, height=20,segment_width=50, apple_body_distance=False):
+    def __init__(self, render=False,width=20, height=20,segment_width=50, apple_body_distance=False, randomness_seed=11111):
         self.ENV_HEIGHT = height 
         self.ENV_WIDTH = width
         self.action_space = spaces.Discrete(4)
         self.snake_previous = None
         self.SEGMENT_WIDTH = segment_width # For rendering only
         self.RENDER = render
-        self.INITIAL_HEALTH = width*2 + height*2
+        self.INITIAL_HEALTH = width * height # More liberal to allow "long route" snakes
         self.APPLE_BODY_DISTANCE = apple_body_distance # If True, apple and walls will be detected as a value before 0 and 1. Else, boolean.
 
-        # Render using pygame
+        self.window = None # Pygame window
 
-        self.window = None
+        # Randomness seeding (for better training? #!exprimental)
+        self.apple_rng_seed = self.start_pos_rng_seed = randomness_seed        # np.random.RandomState(seed) #TODO un-hardcode it 
 
     def step(self, action):
         reward = 0 # initialize per step
@@ -81,13 +84,25 @@ class SnakeEnv(gym.Env):
         return tuple(observations), reward, self.done, {} #TODO turn others back to tuples, not np.array
 
     def reset(self):
-        # Snake starting position
-        head_x = random.randint(3,self.ENV_WIDTH-3)
-        head_y = random.randint(3,self.ENV_HEIGHT-3)
+        # Randomness seeding (for better training? #!exprimental)
+        self.start_pos_rng = np.random.RandomState(self.apple_rng_seed)
+        self.apple_rng = np.random.RandomState(self.start_pos_rng_seed) 
 
-        self.snake_segments = [(head_x,head_y),(head_x,head_y+1),(head_x,head_y+2)]
+        # Snake starting position
+        head_x = self.start_pos_rng.randint(3,self.ENV_WIDTH-3)
+        head_y = self.start_pos_rng.randint(3,self.ENV_HEIGHT-3)
+        self.facing = np.random.randint(0,3) # 0 is up, 1 is right, 2 is down, 3 is left
+        if self.facing == 0:
+            self.snake_segments = [(head_x,head_y),(head_x,head_y+1),(head_x,head_y+2)]
+        elif self.facing == 1:
+            self.snake_segments = [(head_x,head_y),(head_x-1,head_y),(head_x-2,head_y)]
+        elif self.facing == 2:
+            self.snake_segments = [(head_x,head_y),(head_x,head_y-1),(head_x,head_y-2)]
+        else:
+            self.snake_segments = [(head_x,head_y),(head_x+1,head_y),(head_x+2,head_y)]
+
         self.snake_health = self.INITIAL_HEALTH + len(self.snake_segments) # Hitpoints
-        self.facing = 0 # 0 is up, 1 is right, 2 is down, 3 is left #TODO randomize
+        
         # Apple starting position
         self.apple_pos = self._spawn_apple()
 
@@ -195,7 +210,7 @@ class SnakeEnv(gym.Env):
     def _spawn_apple(self):
         position_set = False
         while not position_set:
-            apple_position = (random.randrange(1,self.ENV_WIDTH-2), random.randrange(1,self.ENV_HEIGHT-2)) # (0,0) is wall; (19,19) is wall when WIDTH/HEIGHT is 20.
+            apple_position = (self.apple_rng.randint(1,self.ENV_WIDTH-2), self.apple_rng.randint(1,self.ENV_HEIGHT-2)) # (0,0) is wall; (19,19) is wall when WIDTH/HEIGHT is 20.
 
             # Ensure it does not spawn in any parts of the snake
             for index, segment in enumerate(self.snake_segments):
@@ -377,15 +392,13 @@ class SnakeEnv(gym.Env):
 if __name__ == "__main__":
     import gym
     import gym_snake3
-    env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12)
+    import keyboard
+
+    env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12, randomness_seed=np.random.randint(0,12345667))
     env.reset()
 
-    observation, reward, done, info = env.step(1)
-    observation, reward, done, info = env.step(2)
-    observation, reward, done, info = env.step(2)
-
-    print("observation:", observation)
-    print("")
+    #observation, reward, done, info = env.step(1)
+    
     print("sensed_direction:", env._sense_tail_direction())
 
     env.init_window()
