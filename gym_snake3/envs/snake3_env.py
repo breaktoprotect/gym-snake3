@@ -274,15 +274,15 @@ class SnakeEnv(gym.Env):
                 if object_type == 'wall':
                     #wall_dist = norm_distance
                     wall_dist = self._normalized_distance_two_points(epicenter, cur_point) # always distance-based, not boolean
-                    return wall_dist, body_dist, apple_dist 
+                    #return wall_dist, body_dist, apple_dist 
 
                 if object_type == 'body':
                     body_dist = norm_distance
-                    return wall_dist, body_dist, apple_dist 
+                    #return wall_dist, body_dist, apple_dist 
 
                 if object_type == 'apple':
                     apple_dist = norm_distance
-                    return wall_dist, body_dist, apple_dist 
+                    #return wall_dist, body_dist, apple_dist 
 
         return wall_dist, body_dist, apple_dist # detect only once and return nearest object
 
@@ -397,9 +397,9 @@ if __name__ == "__main__":
     env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12, randomness_seed=np.random.randint(0,12345667))
     env.reset()
 
-    #observation, reward, done, info = env.step(1)
+    observation, reward, done, info = env.step(1)
     
-    print("sensed_direction:", env._sense_tail_direction())
+    print("observation:", observation)
 
     env.init_window()
     env.render()
