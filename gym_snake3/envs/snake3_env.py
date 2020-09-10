@@ -273,7 +273,8 @@ class SnakeEnv(gym.Env):
 
                 if object_type == 'wall':
                     #wall_dist = norm_distance
-                    wall_dist = self._normalized_distance_two_points(epicenter, cur_point) # always distance-based, not boolean
+                    #wall_dist = self._normalized_distance_two_points(epicenter, cur_point) # always distance-based, not boolean
+                    wall_dist = self._simple_distance_two_points(epicenter, cur_point)
                     #return wall_dist, body_dist, apple_dist 
 
                 if object_type == 'body':
@@ -304,6 +305,14 @@ class SnakeEnv(gym.Env):
             object_type = 'apple'
 
         return object_type # If point has an object, return either 'wall', 'apple' or 'body'. Else, return 'None'
+
+    # Implemented closely to match Chrispresso's snake
+    def _simple_distance_two_points(self, point_1, point_2):
+        difference = np.subtract(point_1, point_2)
+
+        distance = 1.0 / max(abs(difference[0]), abs(difference[1]))
+
+        return distance
 
     def _normalized_distance_two_points(self, point_1, point_2):
         '''
@@ -394,11 +403,15 @@ if __name__ == "__main__":
     import gym_snake3
     import keyboard
 
-    env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12, randomness_seed=np.random.randint(0,12345667))
+    env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12, randomness_seed=0)
     env.reset()
 
     observation, reward, done, info = env.step(1)
-    
+    observation, reward, done, info = env.step(1)
+    observation, reward, done, info = env.step(1)
+    observation, reward, done, info = env.step(2)
+    observation, reward, done, info = env.step(2)
+
     print("observation:", observation)
 
     env.init_window()
