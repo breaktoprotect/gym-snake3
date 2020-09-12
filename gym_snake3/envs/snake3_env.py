@@ -10,7 +10,7 @@ import random
 import numpy as np
 import math
 
-from numba import jit # use gpu
+from numba import jit # optimization/speed-up
 
 class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -67,7 +67,9 @@ class SnakeEnv(gym.Env):
         if self.done:
             observations = np.array(32*[0]) # dead snake sense nothing
         else:
-            eight_direction_sensors = self._sense_all_directions(self.snake_segments[0])
+            #eight_direction_sensors = self._sense_all_directions(self.snake_segments[0]) #! to obsolete
+            eight_direction_sensors = self._new_sense_all_directions()
+            
             facing_sensors = self._sense_facing_direction()
             tail_direction = self._sense_tail_direction()
 
@@ -306,14 +308,6 @@ class SnakeEnv(gym.Env):
 
         return object_type # If point has an object, return either 'wall', 'apple' or 'body'. Else, return 'None'
 
-    # Implemented closely to match Chrispresso's snake
-    def _simple_distance_two_points(self, point_1, point_2):
-        difference = np.subtract(point_1, point_2)
-
-        distance = 1.0 / max(abs(difference[0]), abs(difference[1]))
-
-        return distance
-
     def _normalized_distance_two_points(self, point_1, point_2):
         '''
         For horizontal and vertical lines, calculate the difference on X components or Y components respectively.
@@ -396,24 +390,179 @@ class SnakeEnv(gym.Env):
         norm_distance = 1- (distance / max_distance) # Higher value for closer distance (increase neuron stimulation?)
 
         return norm_distance
+    #* ------------------------------------------------
+    #* Newly Optimized All-Directions Object Detections
+    #* ------------------------------------------------
+    def _new_sense_all_directions(self):
+        epicenter = self.snake_segments[:1][0] # Get list, then select position 0
+        apple_pos = self.apple_pos
+        body_segments = self.snake_segments[1:] #excluding the head
+        env_width = self.ENV_WIDTH
+        env_height = self.ENV_HEIGHT
+
+        # Calculate apple
+        apple_observation = self._sense_object_all_directions(epicenter, apple_pos)
+        
+        # calculate snake body
+        body_observation = np.zeros(8)
+        for segment in body_segments:
+            cur_observation = self._sense_object_all_directions(epicenter, segment)
+            
+            #debug
+            #print("cur_observation:", cur_observation)
+            
+            body_observation = np.add(body_observation, cur_observation)
+
+        body_observation = np.clip(body_observation, 0, 1)
+        
+        # Calculate all 8 direction of distances of walls 
+        wall_observation = np.zeros(8)
+        wall_pt_1, wall_pt_5 = self._locate_diagonal_walls(epicenter, -1, env_width, env_height) # / line
+        wall_pt_7, wall_pt_3 = self._locate_diagonal_walls(epicenter, 1, env_width, env_height)  # \ line
+        
+        wall_observation[0] = self._simple_distance_two_points(epicenter, (epicenter[0], 0))
+        wall_observation[1] = self._simple_distance_two_points(epicenter, wall_pt_1)
+        wall_observation[2] = self._simple_distance_two_points(epicenter, (env_width-1, epicenter[1]))
+        wall_observation[3] = self._simple_distance_two_points(epicenter, wall_pt_3)
+        wall_observation[4] = self._simple_distance_two_points(epicenter, (epicenter[0], env_height-1))
+        wall_observation[5] = self._simple_distance_two_points(epicenter, wall_pt_5)
+        wall_observation[6] = self._simple_distance_two_points(epicenter, (0, epicenter[1]))
+        wall_observation[7] = self._simple_distance_two_points(epicenter, wall_pt_7)
+        
+        # wall, apple, body
+        return wall_observation[0], body_observation[0], apple_observation[0], wall_observation[1], body_observation[1], apple_observation[1], wall_observation[2], body_observation[2], apple_observation[2], wall_observation[3], body_observation[3], apple_observation[3], wall_observation[4], body_observation[4], apple_observation[4], wall_observation[5], body_observation[5], apple_observation[5], wall_observation[6], body_observation[6], apple_observation[6], wall_observation[7], body_observation[7], apple_observation[7]
+
+    @staticmethod
+    @jit(nopython=True)
+    def _locate_diagonal_walls(epicenter, gradient, env_width, env_height):
+        if gradient == -1: # / line
+            # Get line equation: y = mx + c
+            m = -1 #gradient
+            c = epicenter[1] - (m*epicenter[0]) # +c component
+            # y = 0, x = (y - c)/m
+            top_wall_y = 0
+            top_wall_x = (top_wall_y - c)/m
+            if top_wall_x > (env_width-1):
+                top_wall_x = (env_width-1)
+                top_wall_y = m*top_wall_x + c
+                
+                bottom_wall_y = (env_height-1)
+                bottom_wall_x = (bottom_wall_y - c) / m
+            else:
+                bottom_wall_x = 0
+                bottom_wall_y = m*bottom_wall_x + c
+                
+            return (top_wall_x, top_wall_y), (bottom_wall_x, bottom_wall_y)
+                
+        else: #gradient == 1
+            m = 1 #gradient
+            c = epicenter[1] - (m*epicenter[0]) # c component
+            
+            top_wall_y = 0
+            top_wall_x = (top_wall_y - c)/m
+            if top_wall_x < 0:
+                top_wall_x = 0
+                top_wall_y = m*top_wall_x + c
+                
+                bottom_wall_y = (env_height -1)
+                bottom_wall_x = (bottom_wall_y - c)/m
+            else:
+                bottom_wall_x = (env_width - 1)
+                bottom_wall_y = m*bottom_wall_x + c
+                
+            return (top_wall_x, top_wall_y), (bottom_wall_x, bottom_wall_y) 
+            
+
+    # Boolean object; Boolean body (for speed optimization)
+    def _sense_object_all_directions(self, epicenter, object_pos):
+        object_direction_bool_list = np.zeros(8) # direction 0 to 7, value 0 means not found, 1 means found
+        
+        ### Detect object position ###
+        # Detect vertical line
+        if epicenter[0] == object_pos[0]: 
+            if epicenter[1] > object_pos[1]:
+                object_direction_bool_list[0] = 1
+            else:
+                object_direction_bool_list[4] = 1
+            return object_direction_bool_list
+                    
+        # Calculate Gradient
+        gradient = self._calculate_gradient(epicenter, object_pos)
+        
+        # Positive gradient \ slope
+        if gradient == 1.0: 
+            if epicenter[1] > object_pos[1]: 
+                object_direction_bool_list[7] = 1
+            else:
+                object_direction_bool_list[3] = 1
+            return object_direction_bool_list
+                
+        # Negative gradient / slope
+        if gradient == -1.0: # 
+            if epicenter[0] > object_pos[0]: # 
+                object_direction_bool_list[5] = 1
+            else:
+                object_direction_bool_list[1] = 1
+            return object_direction_bool_list
+                
+        # Horizontal line
+        if gradient == 0.0: 
+            if epicenter[0] > object_pos[0]:
+                object_direction_bool_list[6] = 1
+            else:
+                object_direction_bool_list[2] = 1
+            return object_direction_bool_list
+
+        # If nothing found, still return 8 zeros    
+        return object_direction_bool_list
+    
+    # Implemented closely to match Chrispresso's snake
+    @staticmethod
+    @jit(nopython=True)
+    def _simple_distance_two_points(point_1, point_2):
+        difference = (point_1[0] - point_2[0], point_1[1] - point_2[1])
+        distance = 1.0 / max(abs(difference[0]), abs(difference[1]))
+
+        return distance
+
+    #@staticmethod 
+    #@jit(nopython=True) #?for some reason with _calculate_gradient it's slower with @jit
+    def _calculate_gradient(self, vector_1, vector_2):
+        return (vector_1[1] - vector_2[1]) / (vector_1[0] - vector_2[0])  # (0,0) starts from top left, not bottom left.
+        
+
+#? Optimization Statistics (12 Sep 2020)
+# [5000 steps trial]
+# Old sensing mechanism time taken: 18.92, 19.05, 19.17
+# New sensing mechanism time taken: 2.45, 2.50, 2.35
+
+# [20000 steps trial]
+# New sensing mechanism time taken: 9.00, 9.51, 8.79
+# Numba optimized (_simple_distance_two_points): 7.46, 7.52, 7.53
+# Numba optimized (_simple_distance_two_points, _calculate_gradient): 7.84, 7.95, 7.71 #?for some reason with _calculate_gradient it's slower
+# Numba optimized (_simple_distance_two_points, _locate_diagonal_walls): 7.30, 7.29, 7.61
 
 #? Test bed only
 if __name__ == "__main__":
     import gym
     import gym_snake3
-    import keyboard
+    import time
 
-    env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12, randomness_seed=0)
+    env = gym.make('snake3-v0', render=True, segment_width=25, width=12, height=12, randomness_seed=1)
     env.reset()
 
-    observation, reward, done, info = env.step(1)
-    observation, reward, done, info = env.step(1)
-    observation, reward, done, info = env.step(1)
-    observation, reward, done, info = env.step(2)
-    observation, reward, done, info = env.step(2)
+    # Performance testing
+    start_time = time.time()
+    for _ in range(0,20000):
+        observation, reward, done, info = env.step(0)
+        observation, reward, done, info = env.step(1)
+        observation, reward, done, info = env.step(2)
+        observation, reward, done, info = env.step(3)
+    elapsed_time = time.time() - start_time
+    print("[%] Total elapsed time:", elapsed_time)
 
-    print("observation:", observation)
+    #print("observation:", observation)
 
-    env.init_window()
-    env.render()
-    input()
+    #env.init_window()
+    #env.render()
+    #input()
