@@ -24,6 +24,7 @@ class SnakeEnv(gym.Env):
         self.RENDER = render
         self.INITIAL_HEALTH = width * height # More liberal to allow "long route" snakes
         self.APPLE_BODY_DISTANCE = apple_body_distance # If True, apple and walls will be detected as a value before 0 and 1. Else, boolean.
+        self.END_GAME_SCORE = ((width-2)*(height-2)) - 3 # Walls not counted
 
         self.window = None # Pygame window
 
@@ -54,14 +55,16 @@ class SnakeEnv(gym.Env):
             self.snake_health -= 1 # reduce hitpoint simulate hunger.
 
         if self.snake_health == 0: 
-            self.done = True
+            self.done = 1
             #print("debug: Snake starved to death. :(")
 
-        #* Additional reward for moving closer towards the red apple
+        # Additional reward for moving closer towards the red apple
+        '''
         if self.snake_previous:
             # Distance between 
             if all(abs(np.subtract(self.apple_pos, self.snake_segments[0])) <= abs(np.subtract(self.apple_pos, self.snake_previous))):
                 reward += 0.00 # Survival reward (was 0.01)
+        ''' #!Obsoleted
 
         #* Observations
         if self.done:
@@ -108,8 +111,11 @@ class SnakeEnv(gym.Env):
         # Apple starting position
         self.apple_pos = self._spawn_apple()
 
+        # Current game score
+        self.current_game_score = 0
+
         # 'Done' state
-        self.done = False
+        self.done = 0
   
         return #? need to return state?
 
@@ -189,6 +195,11 @@ class SnakeEnv(gym.Env):
     def _check_eaten(self):
         if not self.snake_segments[0] == self.apple_pos:
             return 0 
+        else:
+            self.current_game_score += 1
+
+            #debug
+            print("current_game_score:", self.current_game_score)
 
         #* Growing the snake
         additional_segment = self.snake_segments[len(self.snake_segments)-1:] #select the last segment
@@ -204,6 +215,15 @@ class SnakeEnv(gym.Env):
         
         self.snake_segments.append(tuple(additional_segment[0]))
 
+        #* Check end game condition
+        if self.current_game_score == self.END_GAME_SCORE:
+            self.done = 2
+
+            #debug
+            print("[!] Game completed! HURRAY!~!~!~!~!~!~!~!")
+
+            return 1
+
         #* Respawn Apple at random location
         self.apple_pos = self._spawn_apple()
 
@@ -212,7 +232,7 @@ class SnakeEnv(gym.Env):
     def _spawn_apple(self):
         position_set = False
         while not position_set:
-            apple_position = (self.apple_rng.randint(1,self.ENV_WIDTH-2), self.apple_rng.randint(1,self.ENV_HEIGHT-2)) # (0,0) is wall; (19,19) is wall when WIDTH/HEIGHT is 20.
+            apple_position = (self.apple_rng.randint(1,self.ENV_WIDTH-1), self.apple_rng.randint(1,self.ENV_HEIGHT-1)) # (0,0) is wall; (19,19) is wall when WIDTH/HEIGHT is 20.
 
             # Ensure it does not spawn in any parts of the snake
             for index, segment in enumerate(self.snake_segments):
@@ -542,8 +562,50 @@ class SnakeEnv(gym.Env):
 # Numba optimized (_simple_distance_two_points, _calculate_gradient): 7.84, 7.95, 7.71 #?for some reason with _calculate_gradient it's slower
 # Numba optimized (_simple_distance_two_points, _locate_diagonal_walls): 7.30, 7.29, 7.61
 
+
+#? Human player Test bed
+def test_main():
+    import keyboard
+    import time
+    env = SnakeEnv(render=True,segment_width=20, width=8, height=8)
+    env.reset()
+    env.init_window()
+    env.render()
+    done = False
+    fps = 5
+
+    while not done:
+        time.sleep(1/fps)
+        env.render()
+        action = -1
+        while action < 0:
+            if keyboard.is_pressed('up'):
+                action = 0
+            elif keyboard.is_pressed('right'):
+                action = 1
+            elif keyboard.is_pressed('down'):
+                action = 2
+            elif keyboard.is_pressed('left'):
+                action = 3
+            env.render()
+
+        #print("action taken:", action)
+
+
+        observations, rewards, done, _ = env.step(action)
+        env.render()
+
+        #print("observations:",observations)         # Observations: Wall, body, apple
+        print("done state:", done)
+
+        if done:
+            return
+
 #? Test bed only
 if __name__ == "__main__":
+    import sys
+    test_main()
+    sys.exit(1)
     import gym
     import gym_snake3
     import time
@@ -552,6 +614,7 @@ if __name__ == "__main__":
     env.reset()
 
     # Performance testing
+    '''
     start_time = time.time()
     for _ in range(0,20000):
         observation, reward, done, info = env.step(0)
@@ -560,7 +623,7 @@ if __name__ == "__main__":
         observation, reward, done, info = env.step(3)
     elapsed_time = time.time() - start_time
     print("[%] Total elapsed time:", elapsed_time)
-
+    '''
     #print("observation:", observation)
 
     #env.init_window()
