@@ -198,9 +198,6 @@ class SnakeEnv(gym.Env):
         else:
             self.current_game_score += 1
 
-            #debug
-            print("current_game_score:", self.current_game_score)
-
         #* Growing the snake
         additional_segment = self.snake_segments[len(self.snake_segments)-1:] #select the last segment
 
@@ -427,9 +424,6 @@ class SnakeEnv(gym.Env):
         body_observation = np.zeros(8)
         for segment in body_segments:
             cur_observation = self._sense_object_all_directions(epicenter, segment)
-            
-            #debug
-            #print("cur_observation:", cur_observation)
             
             body_observation = np.add(body_observation, cur_observation)
 
